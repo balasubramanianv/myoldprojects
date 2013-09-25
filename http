@@ -1,0 +1,287 @@
+package com.sample.program;
+import java.io.BufferedReader;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.math.BigDecimal;
+import java.text.DecimalFormat;
+import java.text.NumberFormat;
+import java.util.ArrayList;
+import java.util.List;
+
+import org.apache.http.HttpResponse;
+import org.apache.http.client.HttpClient;
+import org.apache.http.client.ResponseHandler;
+import org.apache.http.client.entity.UrlEncodedFormEntity;
+import org.apache.http.client.methods.HttpGet;
+import org.apache.http.client.methods.HttpPost;
+import org.apache.http.impl.client.BasicResponseHandler;
+import org.apache.http.impl.client.DefaultHttpClient;
+import org.apache.http.message.BasicNameValuePair;
+import org.json.JSONArray;
+import org.json.JSONObject;
+
+import android.content.ContentValues;
+import android.content.Context;
+import android.database.Cursor;
+import android.database.sqlite.SQLiteDatabase;
+import android.util.Log;
+
+public class HttpHelper {
+	
+	private static final String FAILED = "Failed";
+	private static final String SUCCESS = "Success";
+	private JSONArray jArray;
+	protected SQLiteDatabase db;
+   
+    public static String request(HttpResponse response){
+        String result = "";
+        try{
+            InputStream in = response.getEntity().getContent();
+            BufferedReader reader = new BufferedReader(new InputStreamReader(in),10000);
+            StringBuilder str = new StringBuilder();
+            String line = null;
+            while((line = reader.readLine()) != null){
+ 
+            	str.append(line);
+            }
+            in.close();
+            result = str.toString();
+        }catch(Exception ex){
+            result = "Error";
+            Log.e("http",ex.getMessage());
+        }
+        return result;
+    }
+    
+   /* public String insertUsers(String companyId){
+
+		String url ="http://personalaccountantapp.appspot.com/rest/com.ci.accountingapp.model.User/read/json";
+		HttpClient client = new DefaultHttpClient();
+		HttpGet request = new HttpGet(url);
+		try {
+			HttpResponse response = client.execute(request);
+			StringBuffer result = new StringBuffer();
+			result.append(HttpHelper.request(response));
+			try {
+				jArray = new JSONArray(result.toString());
+			} catch (Exception e) {
+				Log.e("json", e.getMessage());
+			}
+			dh.deleteAll(DataHelper.TABLE_USERS);
+			  for(int i=0;i<jArray.length();i++){
+                  JSONObject json_data = jArray.getJSONObject(i);
+                  String[] vals={json_data.getString("userName"),json_data.getString("companyID"),json_data.getString("userPassword")};
+                  dh.insert(DataHelper.TABLE_USERS_INSERT,vals );
+			  }
+			  return "Success";
+		} catch (Exception ex) {
+			 Log.e("log_tag", "Error"+ex.getLocalizedMessage());
+			 return "Failed";
+		}
+	
+    }*/
+    public String insertItems(String companyId,Context context){
+    	db = (new DataBaseHelper(context)).getWritableDatabase();
+		String url ="https://personalaccountantapp.appspot.com/rest/com.ci.accountingapp.model.Items/readbyquery/companyId=='"+companyId+"'";
+		HttpClient client = new DefaultHttpClient();
+		HttpGet request = new HttpGet(url);
+		try {
+			HttpResponse response = client.execute(request);
+			StringBuffer result = new StringBuffer();
+			result.append(HttpHelper.request(response));
+			Log.d("Got Data", result.toString());
+			try {
+				jArray = new JSONArray(result.toString());
+			} catch (Exception e) {
+				Log.e("json", e.getMessage());
+			}
+			db.delete("item",null,null);
+			  for(int i=0;i<jArray.length();i++){
+                  JSONObject json_data = jArray.getJSONObject(i);
+                  ContentValues values1 = new ContentValues();
+          		values1.put("ItemName", json_data.getString("name"));
+          		values1.put("ItemID", json_data.getString("id"));
+          		values1.put("PriceList", "");
+          		values1.put("QuantityOnHand", json_data.getString("quantity"));
+          		values1.put("UnitPrice", json_data.getString("salesPrice"));
+          		values1.put("BasePrice", json_data.getString("salesPrice"));
+          		db.insert("item", "ItemID", values1);
+			  }
+			  db.close();
+			  return SUCCESS;
+		} catch (Exception ex) {
+			 Log.e("log_tag", "Error"+ex.getLocalizedMessage());
+			 return FAILED;
+		}
+	
+    }
+    public String insertCustomers(String companyId,Context context){
+    	db = (new DataBaseHelper(context)).getWritableDatabase();
+		String url ="https://personalaccountantapp.appspot.com/rest/com.ci.accountingapp.model.Customer/readbyquery/companyId=='"+companyId+"'";
+		Log.d("URL", url);
+		HttpClient client = new DefaultHttpClient();
+		HttpGet request = new HttpGet(url);
+		try {
+			HttpResponse response = client.execute(request);
+			StringBuffer result = new StringBuffer();
+			result.append(HttpHelper.request(response));
+			Log.d("Got Data", result.toString());
+			try {
+				jArray = new JSONArray(result.toString());
+			} catch (Exception e) {
+				Log.e("json", e.getMessage());
+			}
+			db.delete("customer",null,null);
+			  for(int i=0;i<jArray.length();i++){
+                  JSONObject json_data = jArray.getJSONObject(i);
+                  ContentValues values = new ContentValues();
+                  values.put("custID", json_data.getString("id"));
+                  values.put("firstName", json_data.getString("firstName"));
+                  values.put("lastName", json_data.getString("lastName"));
+                  values.put("Location", "");
+                  values.put("officePhone",json_data.getString("phoneNumber"));
+                  values.put("cellPhone", json_data.getString("mobileNumber"));
+                  values.put("email", json_data.getString("email"));
+                  db.insert("customer", "lastName", values);
+			  }
+			  db.close();
+			  return SUCCESS;
+		} catch (Exception ex) {
+			 Log.e("log_tag", "Error"+ex.getLocalizedMessage());
+			 return FAILED;
+		}
+	
+    }
+    
+    
+  
+
+    
+    public String postCustomerInvoice(String companyId,Context context){
+		  
+    	  db = (new DataBaseHelper(context)).getReadableDatabase();
+    	 
+          Cursor cursor = db.rawQuery("SELECT custID,SONumber,soDate,shipDate,total from customerinvoice", null);
+       
+       while(cursor.moveToNext()) {
+  	    	String custId=cursor.getString(0);
+  	    	String soNum=cursor.getString(1);
+  	    	String soDate=cursor.getString(2);
+  	    	String shipDate=cursor.getString(3);
+  	    	String total=cursor.getString(4);
+  	    	String jsonFormat="{\"customerId\":"+custId+",\"sonumber\":\""+soNum+"\",\"soDueDate\":\"\",\"shipDate\":\""+shipDate+"\",\"total\":"+total+",\"soDate\":\""+soDate+"\",\"companyId\":\"CI\"}";
+  	    	Log.d("JSON",jsonFormat);
+		    String url ="https://personalaccountantapp.appspot.com/rest/com.ci.accountingapp.model.SOHeader/insert/json";
+		    HttpClient client = new DefaultHttpClient();
+		    HttpPost post = new HttpPost(url);
+		    List pairs = new ArrayList();
+		    pairs.add(new BasicNameValuePair("data", jsonFormat));
+		    try {
+		        post.setEntity(new UrlEncodedFormEntity(pairs));
+		        ResponseHandler<String> responseHandler = new BasicResponseHandler();
+		        String response = client.execute(post, responseHandler);
+		        Log.d("HttpPost", "Response: " + response);
+		        if (response.contains("Success")){
+		            Log.d("REsponse Post", response);
+		        } else {
+		        	Log.d("REsponse Post", response);
+		        }
+		        //db.close();
+		    } catch (Exception e) {
+		    	Log.d("Excep1", e.getLocalizedMessage());
+		    	return "";
+		    }
+		}
+       db.delete("customerinvoice",null,null);
+       return "Success";
+	   
+    }
+
+    public String postCustomer(String companyId,Context context){
+		  
+  	  db = (new DataBaseHelper(context)).getReadableDatabase();
+  	  String[] cols={""};
+        Cursor cursor = db.rawQuery("SELECT firstName,lastName,Location,officePhone,cellPhone,email from customer where custID=?", cols);
+        Log.d("Cust Count", cursor.getCount()+"");
+     
+     while(cursor.moveToNext()) {
+	    	String firstName=cursor.getString(0);
+	    	String lastName=cursor.getString(1);
+	    	String Location=cursor.getString(2);
+	    	String officePhone=cursor.getString(3);
+	    	String cellPhone=cursor.getString(4);
+	    	String email=cursor.getString(5);
+	    	String jsonFormat="{\"firstName\":\""+firstName+"\",\"lastName\":\""+lastName+"\",\"email\":\""+email+"\",\"phoneNumber\":"+officePhone+",\"mobileNumber\":"+cellPhone+",\"companyId\":\"CI\"}";
+	    	Log.d("JSON",jsonFormat);
+		    String url ="https://personalaccountantapp.appspot.com/rest/com.ci.accountingapp.model.Customer/insert/json";
+		    HttpClient client = new DefaultHttpClient();
+		    HttpPost post = new HttpPost(url);
+		    List pairs = new ArrayList();
+		    pairs.add(new BasicNameValuePair("data", jsonFormat));
+		    try {
+		        post.setEntity(new UrlEncodedFormEntity(pairs));
+		        ResponseHandler<String> responseHandler = new BasicResponseHandler();
+		        String response = client.execute(post, responseHandler);
+		        Log.d("HttpPost", "Response: " + response);
+		        if (response.contains("Success")){
+		            Log.d("REsponse Post", response);
+		        } else {
+		        	Log.d("REsponse Post", response);
+		        }
+		        //db.close();
+		    } catch (Exception e) {
+		    	Log.d("Exception", e.getLocalizedMessage());
+		    	return "";
+		    }
+		}
+     return "Success";
+	   
+  }
+
+    public String postselecteditem(String companyId,Context context){
+		  
+  	  db = (new DataBaseHelper(context)).getReadableDatabase();
+        Cursor cursor = db.rawQuery("SELECT ItemID,ItemName,SONumber,Quantity,UnitPrice from invoicereport", null);
+     
+       Log.d("Items Count", cursor.getCount()+"");
+     while(cursor.moveToNext()) {
+	    	String itemId=cursor.getString(0);
+	    	String itemName=cursor.getString(1);
+	    	String soNum=cursor.getString(2);
+	    	String quantity=cursor.getString(3);
+	    	String unit=cursor.getString(4);
+	    	final NumberFormat formatter = new DecimalFormat("#00.00");
+            BigDecimal bd1 = new BigDecimal(quantity);  
+            BigDecimal bd2 = new BigDecimal(unit);  
+            BigDecimal mult = bd1.multiply(bd2);  
+            String amount=formatter.format(mult);
+
+	    	String jsonFormat="{\"soHeaderId\":"+soNum+",\"itemId\":"+itemId+",\"description\":\"\",\"quantity\":"+quantity+",\"unitPrice\":"+unit+",\"amount\":"+amount+",\"companyId\":\"CI\"}";
+	    	Log.d("JSON Item",jsonFormat);
+		    String url ="https://personalaccountantapp.appspot.com/rest/com.ci.accountingapp.model.SOItems/insert/json";
+		    HttpClient client = new DefaultHttpClient();
+		    HttpPost post = new HttpPost(url);
+		    List pairs = new ArrayList();
+		    pairs.add(new BasicNameValuePair("data", jsonFormat));
+		    try {
+		        post.setEntity(new UrlEncodedFormEntity(pairs));
+		        ResponseHandler<String> responseHandler = new BasicResponseHandler();
+		        String response = client.execute(post, responseHandler);
+		        Log.v("HttpPost Item", "Response: " + response);
+		        if (response.contains("Success")){
+		            Log.d("REsponse Post Item", response);
+		        } else {
+		        	Log.d("REsponse Post Item", response);
+		        }
+		       // db.close();
+		    } catch (Exception e) {
+		    	Log.d("Excep2", e.getLocalizedMessage());
+		    	return "";
+		    }
+		}
+     db.delete("invoicereport",null,null);
+     return "Success";
+	   
+  }
+    //public String insertDetails(String url,String tableName,String tableInsert,)
+} 
